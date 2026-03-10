@@ -35,7 +35,7 @@ import { Category } from "@/types/menu"
 // ---------------------------------------------------------------------------
 const categorySchema = z.object({
     name: z.string().min(1, "Kategori adı boş bırakılamaz."),
-    sort_order: z.coerce.number().int().min(0, "Sıra 0 veya pozitif olmalıdır."),
+    sort_order: z.coerce.number().int().min(1, "Sıra 1 veya pozitif olmalıdır."),
 })
 
 // z.coerce kullanıldığında Zod input tipi 'unknown', output tipi 'number' olur.
@@ -84,7 +84,10 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
     // Dialog aç: yeni ekleme
     function openCreateDialog() {
         setEditingCategory(null)
-        reset({ name: "", sort_order: categories.length })
+        const nextSortOrder = categories.length > 0
+            ? Math.max(...categories.map(c => c.sort_order)) + 1
+            : 1
+        reset({ name: "", sort_order: nextSortOrder })
         setError(null)
         setDialogOpen(true)
     }
@@ -108,6 +111,16 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
         setIsLoading(true)
         setError(null)
 
+        const isSortOrderTaken = categories.some(
+            (c) => c.sort_order === data.sort_order && c.id !== editingCategory?.id
+        )
+
+        if (isSortOrderTaken) {
+            setError("Bu sıra numarası başka bir kategori tarafından kullanılıyor.")
+            setIsLoading(false)
+            return
+        }
+
         if (editingCategory) {
             // Güncelle
             const { data: updated, error: updateError } = await (supabase as any)
@@ -118,9 +131,13 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
                 .single() as { data: Category | null; error: { code: string; message: string } | null }
 
             if (updateError) {
-                setError(updateError.code === "23505"
-                    ? "Bu isimde bir kategori zaten mevcut."
-                    : updateError.message)
+                if (updateError.code === "23505") {
+                    setError(updateError.message.includes("sort_order")
+                        ? "Bu sıra numarası başka bir kategori tarafından kullanılıyor."
+                        : "Bu isimde bir kategori zaten mevcut.")
+                } else {
+                    setError(updateError.message)
+                }
                 setIsLoading(false)
                 return
             }
@@ -142,9 +159,13 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
                 .single() as { data: Category | null; error: { code: string; message: string } | null }
 
             if (insertError) {
-                setError(insertError.code === "23505"
-                    ? "Bu isimde bir kategori zaten mevcut."
-                    : insertError.message)
+                if (insertError.code === "23505") {
+                    setError(insertError.message.includes("sort_order")
+                        ? "Bu sıra numarası başka bir kategori tarafından kullanılıyor."
+                        : "Bu isimde bir kategori zaten mevcut.")
+                } else {
+                    setError(insertError.message)
+                }
                 setIsLoading(false)
                 return
             }
@@ -317,7 +338,7 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
                             <Input
                                 id="cat-sort"
                                 type="number"
-                                min={0}
+                                min={1}
                                 {...register("sort_order", { valueAsNumber: true })}
                                 disabled={isLoading}
                             />

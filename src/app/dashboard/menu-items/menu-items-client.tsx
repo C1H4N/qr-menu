@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useForm, type SubmitHandler } from "react-hook-form"
@@ -50,7 +50,7 @@ const menuItemSchema = z.object({
         .min(0, "Fiyat 0 veya daha yüksek olmalıdır."),
     image_url: z.string().url("Geçerli bir URL girin.").optional().or(z.literal("")),
     category_id: z.string().min(1, "Kategori seçimi zorunludur."),
-    sort_order: z.coerce.number().int().min(0, "Sıra 0 veya pozitif olmalıdır."),
+    sort_order: z.coerce.number().int().min(1, "Sıra 1 veya pozitif olmalıdır."),
     is_active: z.boolean(),
     is_featured: z.boolean(),
 })
@@ -111,7 +111,7 @@ export function MenuItemsClient({
             price: 0,
             image_url: "",
             category_id: categories[0]?.id ?? "",
-            sort_order: 0,
+            sort_order: 1,
             is_active: true,
             is_featured: false,
         },
@@ -121,21 +121,33 @@ export function MenuItemsClient({
     const isFeaturedVal = watch("is_featured")
     const categoryIdVal = watch("category_id")
 
-    // Kategori adını id'den bul
-    function getCategoryName(id: string) {
-        return categories.find((c) => c.id === id)?.name ?? "-"
+
+
+    // Kategoriye göre yeni sort_order değerini hesapla
+    function getNextSortOrder(categoryId: string) {
+        const categoryItems = menuItems.filter((i) => i.category_id === categoryId)
+        if (categoryItems.length === 0) return 1
+        return Math.max(...categoryItems.map((i) => i.sort_order)) + 1
     }
+
+    // Seçili kategori değiştiğinde eğer "Yeni Kayıt" modundaysak sort_order değerini güncelle
+    useEffect(() => {
+        if (dialogOpen && !editingItem && categoryIdVal) {
+            setValue("sort_order", getNextSortOrder(categoryIdVal), { shouldValidate: true })
+        }
+    }, [categoryIdVal, dialogOpen, editingItem])
 
     // Dialog aç: yeni ürün
     function openCreateDialog() {
         setEditingItem(null)
+        const defaultCategory = categories[0]?.id ?? ""
         reset({
             name: "",
             description: "",
             price: 0,
             image_url: "",
-            category_id: categories[0]?.id ?? "",
-            sort_order: menuItems.length,
+            category_id: defaultCategory,
+            sort_order: defaultCategory ? getNextSortOrder(defaultCategory) : 1,
             is_active: true,
             is_featured: false,
         })
@@ -170,7 +182,7 @@ export function MenuItemsClient({
             price: 0,
             image_url: "",
             category_id: categories[0]?.id ?? "",
-            sort_order: 0,
+            sort_order: 1,
             is_active: true,
             is_featured: false,
         })
@@ -193,16 +205,32 @@ export function MenuItemsClient({
             sort_order: data.sort_order,
         }
 
+        const isSortOrderTaken = menuItems.some(
+            (i) => i.category_id === data.category_id && i.sort_order === data.sort_order && i.id !== editingItem?.id
+        )
+
+        if (isSortOrderTaken) {
+            setError("Bu kategori içinde bu sıra numarası kullanımda.")
+            setIsLoading(false)
+            return
+        }
+
         if (editingItem) {
             const { data: updated, error: updateError } = await (supabase as any)
                 .from("menu_items")
                 .update(payload)
                 .eq("id", editingItem.id)
                 .select()
-                .single() as { data: MenuItem | null; error: { message: string } | null }
+                .single() as { data: MenuItem | null; error: { code: string; message: string } | null }
 
             if (updateError) {
-                setError(updateError.message)
+                if (updateError.code === "23505") {
+                    setError(updateError.message.includes("sort_order")
+                        ? "Bu kategori içinde bu sıra numarası kullanımda."
+                        : "Aynı isimde başka bir ürün bulunuyor.")
+                } else {
+                    setError(updateError.message)
+                }
                 setIsLoading(false)
                 return
             }
@@ -214,10 +242,16 @@ export function MenuItemsClient({
                 .from("menu_items")
                 .insert(payload)
                 .select()
-                .single() as { data: MenuItem | null; error: { message: string } | null }
+                .single() as { data: MenuItem | null; error: { code: string; message: string } | null }
 
             if (insertError) {
-                setError(insertError.message)
+                if (insertError.code === "23505") {
+                    setError(insertError.message.includes("sort_order")
+                        ? "Bu kategori içinde bu sıra numarası kullanımda."
+                        : "Aynı isimde başka bir ürün bulunuyor.")
+                } else {
+                    setError(insertError.message)
+                }
                 setIsLoading(false)
                 return
             }
@@ -275,6 +309,17 @@ export function MenuItemsClient({
     // Render
     // ---------------------------------------------------------------------------
 
+    const groupedItems = categories
+        .map((category) => {
+            const items = menuItems.filter((i) => i.category_id === category.id)
+            return {
+                ...category,
+                items: items.sort((a, b) => a.sort_order - b.sort_order),
+            }
+        })
+        .filter((group) => group.items.length > 0)
+        .sort((a, b) => a.sort_order - b.sort_order)
+
     // Boş kategori durumu
     if (categories.length === 0) {
         return (
@@ -331,83 +376,87 @@ export function MenuItemsClient({
                     </Button>
                 </div>
             ) : (
-                <div className="rounded-md border">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-10">#</TableHead>
-                                <TableHead>Ürün Adı</TableHead>
-                                <TableHead>Kategori</TableHead>
-                                <TableHead className="w-24 text-right">Fiyat</TableHead>
-                                <TableHead className="w-24 text-center">Aktif</TableHead>
-                                <TableHead className="w-24 text-center">Öne Çıkan</TableHead>
-                                <TableHead className="w-24 text-right">İşlemler</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {[...menuItems]
-                                .sort((a, b) => a.sort_order - b.sort_order)
-                                .map((item) => (
-                                    <TableRow key={item.id}>
-                                        <TableCell className="text-muted-foreground text-sm">
-                                            {item.sort_order}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div>
-                                                <p className="font-medium">{item.name}</p>
-                                                {item.description && (
-                                                    <p className="text-xs text-muted-foreground truncate max-w-xs">
-                                                        {item.description}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline" className="text-xs">
-                                                {getCategoryName(item.category_id)}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right font-medium">
-                                            {Number(item.price).toFixed(2)} ₺
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            <Switch
-                                                checked={item.is_active}
-                                                onCheckedChange={() => handleToggleActive(item)}
-                                                id={`active-${item.id}`}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            <Switch
-                                                checked={item.is_featured}
-                                                onCheckedChange={() => handleToggleFeatured(item)}
-                                                id={`featured-${item.id}`}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-1">
-                                                <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    onClick={() => openEditDialog(item)}
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                    onClick={() => handleDelete(item.id)}
-                                                    disabled={deletingId === item.id}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                        </TableBody>
-                    </Table>
+                <div className="space-y-8">
+                    {groupedItems.map((group) => (
+                        <div key={group.id} className="space-y-3">
+                            <div className="flex items-center gap-2 px-1">
+                                <h3 className="text-lg font-semibold">{group.name}</h3>
+                                <Badge variant="secondary" className="text-xs">
+                                    {group.items.length} Ürün
+                                </Badge>
+                            </div>
+                            <div className="rounded-md border bg-card">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-10">#</TableHead>
+                                            <TableHead>Ürün Adı</TableHead>
+                                            <TableHead className="w-24 text-right">Fiyat</TableHead>
+                                            <TableHead className="w-24 text-center">Aktif</TableHead>
+                                            <TableHead className="w-24 text-center">Öne Çıkan</TableHead>
+                                            <TableHead className="w-24 text-right">İşlemler</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {group.items.map((item) => (
+                                            <TableRow key={item.id}>
+                                                <TableCell className="text-muted-foreground text-sm">
+                                                    {item.sort_order}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div>
+                                                        <p className="font-medium">{item.name}</p>
+                                                        {item.description && (
+                                                            <p className="text-xs text-muted-foreground truncate max-w-xs">
+                                                                {item.description}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right font-medium">
+                                                    {Number(item.price).toFixed(2)} ₺
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Switch
+                                                        checked={item.is_active}
+                                                        onCheckedChange={() => handleToggleActive(item)}
+                                                        id={`active-${item.id}`}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Switch
+                                                        checked={item.is_featured}
+                                                        onCheckedChange={() => handleToggleFeatured(item)}
+                                                        id={`featured-${item.id}`}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Button
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            onClick={() => openEditDialog(item)}
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                            onClick={() => handleDelete(item.id)}
+                                                            disabled={deletingId === item.id}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
 
@@ -467,11 +516,11 @@ export function MenuItemsClient({
 
                             {/* Sıra */}
                             <div className="space-y-2">
-                                <Label htmlFor="item-sort">Sıra No</Label>
+                                <Label htmlFor="item-sort">Kategori İçi Sıra</Label>
                                 <Input
                                     id="item-sort"
                                     type="number"
-                                    min={0}
+                                    min={1}
                                     {...register("sort_order", { valueAsNumber: true })}
                                     disabled={isLoading}
                                 />
