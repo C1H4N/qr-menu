@@ -1,27 +1,7 @@
-export interface Category {
-    id: string
-    restaurant_id: string
-    name: string
-    sort_order: number
-    is_active: boolean
-    created_at: string
-    updated_at: string
-}
+import type { Database } from './database'
 
-export interface MenuItem {
-    id: string
-    restaurant_id: string
-    category_id: string
-    name: string
-    description: string | null
-    price: number
-    image_url: string | null
-    is_active: boolean
-    is_featured: boolean
-    sort_order: number
-    created_at: string
-    updated_at: string
-}
+export type Category = Database['public']['Tables']['categories']['Row']
+export type MenuItem = Database['public']['Tables']['menu_items']['Row']
 
 export interface CategoryWithItems extends Category {
     menu_items: MenuItem[]

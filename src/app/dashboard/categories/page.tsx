@@ -11,28 +11,26 @@ export default async function CategoriesPage() {
     if (!user) redirect("/login")
 
     // Kullanıcının restoranını bul
-    const { data: restaurant } = await (supabase as any)
+    const { data: restaurant } = await supabase
         .from("restaurants")
         .select("id")
         .eq("owner_user_id", user.id)
-        .maybeSingle() as { data: { id: string } | null }
+        .maybeSingle()
 
     // Restoran yoksa onboarding'e yönlendir
     if (!restaurant) redirect("/dashboard")
 
     // Restorana ait kategorileri getir
-    const { data: categories } = await (supabase as any)
+    const { data: categories } = await supabase
         .from("categories")
         .select("*")
         .eq("restaurant_id", restaurant.id)
-        .order("sort_order", { ascending: true }) as { data: Category[] | null }
+        .order("sort_order", { ascending: true })
 
     return (
-        <main className="container mx-auto p-4 md:p-8 max-w-5xl">
-            <CategoriesClient
-                restaurantId={restaurant.id}
-                initialCategories={(categories ?? []) as Category[]}
-            />
-        </main>
+        <CategoriesClient
+            restaurantId={restaurant.id}
+            initialCategories={(categories ?? []) as Category[]}
+        />
     )
 }

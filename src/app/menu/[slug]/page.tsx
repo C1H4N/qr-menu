@@ -12,30 +12,30 @@ async function getMenuData(slug: string) {
     const supabase = await createClient()
 
     // 1. Restoranı slug ile bul (sadece aktif olanı)
-    const { data: restaurant } = await (supabase as any)
+    const { data: restaurant } = await supabase
         .from("restaurants")
         .select("*")
         .eq("slug", slug)
         .eq("is_active", true)
-        .maybeSingle() as { data: Restaurant | null }
+        .maybeSingle()
 
     if (!restaurant) return null
 
     // 2. Aktif kategorileri sıralı getir
-    const { data: categories } = await (supabase as any)
+    const { data: categories } = await supabase
         .from("categories")
         .select("*")
         .eq("restaurant_id", restaurant.id)
         .eq("is_active", true)
-        .order("sort_order", { ascending: true }) as { data: Category[] | null }
+        .order("sort_order", { ascending: true })
 
     // 3. Aktif ürünleri sıralı getir
-    const { data: menuItems } = await (supabase as any)
+    const { data: menuItems } = await supabase
         .from("menu_items")
         .select("*")
         .eq("restaurant_id", restaurant.id)
         .eq("is_active", true)
-        .order("sort_order", { ascending: true }) as { data: MenuItem[] | null }
+        .order("sort_order", { ascending: true })
 
     return {
         restaurant,

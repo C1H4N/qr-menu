@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useForm, type SubmitHandler } from "react-hook-form"
@@ -21,6 +21,16 @@ import {
     DialogTitle,
     DialogFooter,
 } from "@/components/ui/dialog"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
     Select,
     SelectContent,
@@ -93,6 +103,7 @@ export function MenuItemsClient({
     const [dialogOpen, setDialogOpen] = useState(false)
     const [editingItem, setEditingItem] = useState<MenuItem | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [deleteTarget, setDeleteTarget] = useState<MenuItem | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [isLoading, setIsLoading] = useState(false)
 
@@ -122,20 +133,19 @@ export function MenuItemsClient({
     const categoryIdVal = watch("category_id")
 
 
-
     // Kategoriye göre yeni sort_order değerini hesapla
-    function getNextSortOrder(categoryId: string) {
+    const getNextSortOrder = useCallback((categoryId: string) => {
         const categoryItems = menuItems.filter((i) => i.category_id === categoryId)
         if (categoryItems.length === 0) return 1
         return Math.max(...categoryItems.map((i) => i.sort_order)) + 1
-    }
+    }, [menuItems])
 
     // Seçili kategori değiştiğinde eğer "Yeni Kayıt" modundaysak sort_order değerini güncelle
     useEffect(() => {
         if (dialogOpen && !editingItem && categoryIdVal) {
             setValue("sort_order", getNextSortOrder(categoryIdVal), { shouldValidate: true })
         }
-    }, [categoryIdVal, dialogOpen, editingItem])
+    }, [categoryIdVal, dialogOpen, editingItem, setValue, getNextSortOrder])
 
     // Dialog aç: yeni ürün
     function openCreateDialog() {
@@ -216,12 +226,12 @@ export function MenuItemsClient({
         }
 
         if (editingItem) {
-            const { data: updated, error: updateError } = await (supabase as any)
+            const { data: updated, error: updateError } = await supabase
                 .from("menu_items")
                 .update(payload)
                 .eq("id", editingItem.id)
                 .select()
-                .single() as { data: MenuItem | null; error: { code: string; message: string } | null }
+                .single()
 
             if (updateError) {
                 if (updateError.code === "23505") {
@@ -235,14 +245,14 @@ export function MenuItemsClient({
                 return
             }
             setMenuItems((prev) =>
-                prev.map((i) => (i.id === editingItem.id ? (updated as MenuItem) : i))
+                prev.map((i) => (i.id === editingItem.id ? updated! : i))
             )
         } else {
-            const { data: inserted, error: insertError } = await (supabase as any)
+            const { data: inserted, error: insertError } = await supabase
                 .from("menu_items")
                 .insert(payload)
                 .select()
-                .single() as { data: MenuItem | null; error: { code: string; message: string } | null }
+                .single()
 
             if (insertError) {
                 if (insertError.code === "23505") {
@@ -255,7 +265,7 @@ export function MenuItemsClient({
                 setIsLoading(false)
                 return
             }
-            setMenuItems((prev) => [...prev, inserted as MenuItem])
+            setMenuItems((prev) => [...prev, inserted!])
         }
 
         closeDialog()
@@ -266,7 +276,7 @@ export function MenuItemsClient({
     // Aktif/Pasif toggle
     async function handleToggleActive(item: MenuItem) {
         const newVal = !item.is_active
-        const { error: toggleError } = await (supabase as any)
+        const { error: toggleError } = await supabase
             .from("menu_items")
             .update({ is_active: newVal })
             .eq("id", item.id)
@@ -280,7 +290,7 @@ export function MenuItemsClient({
     // Featured toggle
     async function handleToggleFeatured(item: MenuItem) {
         const newVal = !item.is_featured
-        const { error: featuredError } = await (supabase as any)
+        const { error: featuredError } = await supabase
             .from("menu_items")
             .update({ is_featured: newVal })
             .eq("id", item.id)
@@ -291,18 +301,25 @@ export function MenuItemsClient({
         router.refresh()
     }
 
-    // Sil
-    async function handleDelete(id: string) {
-        setDeletingId(id)
-        const { error: deleteError } = await (supabase as any)
+    // Silme onayı iste
+    function confirmDelete(item: MenuItem) {
+        setDeleteTarget(item)
+    }
+
+    // Silme işlemini gerçekleştir
+    async function handleDelete() {
+        if (!deleteTarget) return
+        setDeletingId(deleteTarget.id)
+        const { error: deleteError } = await supabase
             .from("menu_items")
             .delete()
-            .eq("id", id)
+            .eq("id", deleteTarget.id)
         if (!deleteError) {
-            setMenuItems((prev) => prev.filter((i) => i.id !== id))
+            setMenuItems((prev) => prev.filter((i) => i.id !== deleteTarget.id))
             router.refresh()
         }
         setDeletingId(null)
+        setDeleteTarget(null)
     }
 
     // ---------------------------------------------------------------------------
@@ -443,7 +460,7 @@ export function MenuItemsClient({
                                                             size="icon"
                                                             variant="ghost"
                                                             className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                            onClick={() => handleDelete(item.id)}
+                                                            onClick={() => confirmDelete(item)}
                                                             disabled={deletingId === item.id}
                                                         >
                                                             <Trash2 className="h-4 w-4" />
@@ -626,6 +643,29 @@ export function MenuItemsClient({
                     </form>
                 </DialogContent>
             </Dialog>
+
+            {/* Silme Onay Diyaloğu */}
+            <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Ürünü silmek istediğinize emin misiniz?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            <strong>&ldquo;{deleteTarget?.name}&rdquo;</strong> ürünü kalıcı olarak silinecektir.
+                            Bu işlem geri alınamaz.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={!!deletingId}>İptal</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDelete}
+                            disabled={!!deletingId}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {deletingId ? "Siliniyor..." : "Evet, Sil"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

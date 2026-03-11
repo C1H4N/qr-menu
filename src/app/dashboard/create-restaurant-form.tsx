@@ -64,7 +64,7 @@ export function CreateRestaurantForm({ userId }: { userId: string }) {
                 address: data.address || null,
                 theme_color: data.theme_color || '#000000',
                 is_active: true,
-            } as any) // TS "never" hatasını baypas etmek için eklendi
+            })
 
         if (insertError) {
             if (insertError.code === '23505') {

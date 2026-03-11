@@ -1,6 +1,3 @@
-import { Restaurant } from './restaurant'
-import { Category, MenuItem } from './menu'
-
 export type Json =
     | string
     | number
@@ -13,67 +10,150 @@ export interface Database {
     public: {
         Tables: {
             restaurants: {
-                Row: Restaurant
-                Insert: Omit<Restaurant, 'id' | 'created_at' | 'updated_at'> & {
+                Row: {
+                    id: string
+                    owner_user_id: string
+                    name: string
+                    slug: string
+                    description: string | null
+                    logo_url: string | null
+                    cover_image_url: string | null
+                    phone: string | null
+                    address: string | null
+                    theme_color: string | null
+                    is_active: boolean
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
                     id?: string
+                    owner_user_id: string
+                    name: string
+                    slug: string
+                    description?: string | null
+                    logo_url?: string | null
+                    cover_image_url?: string | null
+                    phone?: string | null
+                    address?: string | null
+                    theme_color?: string | null
+                    is_active?: boolean
                     created_at?: string
                     updated_at?: string
                 }
-                Update: Partial<
-                    Omit<Restaurant, 'id' | 'created_at' | 'updated_at'> & {
-                        id?: string
-                        created_at?: string
-                        updated_at?: string
-                    }
-                >
+                Update: {
+                    id?: string
+                    owner_user_id?: string
+                    name?: string
+                    slug?: string
+                    description?: string | null
+                    logo_url?: string | null
+                    cover_image_url?: string | null
+                    phone?: string | null
+                    address?: string | null
+                    theme_color?: string | null
+                    is_active?: boolean
+                    created_at?: string
+                    updated_at?: string
+                }
+                Relationships: []
             }
             categories: {
-                Row: Category
-                Insert: Omit<Category, 'id' | 'created_at' | 'updated_at' | 'sort_order' | 'is_active'> & {
+                Row: {
+                    id: string
+                    restaurant_id: string
+                    name: string
+                    sort_order: number
+                    is_active: boolean
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
                     id?: string
+                    restaurant_id: string
+                    name: string
                     sort_order?: number
                     is_active?: boolean
                     created_at?: string
                     updated_at?: string
                 }
-                Update: Partial<
-                    Omit<Category, 'id' | 'created_at' | 'updated_at' | 'sort_order' | 'is_active'> & {
-                        id?: string
-                        sort_order?: number
-                        is_active?: boolean
-                        created_at?: string
-                        updated_at?: string
+                Update: {
+                    id?: string
+                    restaurant_id?: string
+                    name?: string
+                    sort_order?: number
+                    is_active?: boolean
+                    created_at?: string
+                    updated_at?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "categories_restaurant_id_fkey"
+                        columns: ["restaurant_id"]
+                        isOneToOne: false
+                        referencedRelation: "restaurants"
+                        referencedColumns: ["id"]
                     }
-                >
+                ]
             }
             menu_items: {
-                Row: MenuItem
-                Insert: Omit<
-                    MenuItem,
-                    'id' | 'created_at' | 'updated_at' | 'price' | 'is_active' | 'is_featured' | 'sort_order'
-                > & {
+                Row: {
+                    id: string
+                    restaurant_id: string
+                    category_id: string
+                    name: string
+                    description: string | null
+                    price: number
+                    image_url: string | null
+                    is_active: boolean
+                    is_featured: boolean
+                    sort_order: number
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
                     id?: string
+                    restaurant_id: string
+                    category_id: string
+                    name: string
+                    description?: string | null
                     price?: number
+                    image_url?: string | null
                     is_active?: boolean
                     is_featured?: boolean
                     sort_order?: number
                     created_at?: string
                     updated_at?: string
                 }
-                Update: Partial<
-                    Omit<
-                        MenuItem,
-                        'id' | 'created_at' | 'updated_at' | 'price' | 'is_active' | 'is_featured' | 'sort_order'
-                    > & {
-                        id?: string
-                        price?: number
-                        is_active?: boolean
-                        is_featured?: boolean
-                        sort_order?: number
-                        created_at?: string
-                        updated_at?: string
+                Update: {
+                    id?: string
+                    restaurant_id?: string
+                    category_id?: string
+                    name?: string
+                    description?: string | null
+                    price?: number
+                    image_url?: string | null
+                    is_active?: boolean
+                    is_featured?: boolean
+                    sort_order?: number
+                    created_at?: string
+                    updated_at?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "menu_items_restaurant_id_fkey"
+                        columns: ["restaurant_id"]
+                        isOneToOne: false
+                        referencedRelation: "restaurants"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "menu_items_category_id_fkey"
+                        columns: ["category_id"]
+                        isOneToOne: false
+                        referencedRelation: "categories"
+                        referencedColumns: ["id"]
                     }
-                >
+                ]
             }
         }
         Views: {

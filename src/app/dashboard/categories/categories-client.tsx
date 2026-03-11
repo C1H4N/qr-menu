@@ -19,6 +19,16 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog"
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
     Table,
     TableBody,
     TableCell,
@@ -69,6 +79,7 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
     const [dialogOpen, setDialogOpen] = useState(false)
     const [editingCategory, setEditingCategory] = useState<Category | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [deleteTarget, setDeleteTarget] = useState<Category | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [isLoading, setIsLoading] = useState(false)
 
@@ -123,12 +134,12 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
 
         if (editingCategory) {
             // Güncelle
-            const { data: updated, error: updateError } = await (supabase as any)
+            const { data: updated, error: updateError } = await supabase
                 .from("categories")
                 .update({ name: data.name, sort_order: data.sort_order })
                 .eq("id", editingCategory.id)
                 .select()
-                .single() as { data: Category | null; error: { code: string; message: string } | null }
+                .single()
 
             if (updateError) {
                 if (updateError.code === "23505") {
@@ -143,11 +154,11 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
             }
 
             setCategories(prev =>
-                prev.map(c => c.id === editingCategory.id ? (updated as Category) : c)
+                prev.map(c => c.id === editingCategory.id ? updated! : c)
             )
         } else {
             // Ekle
-            const { data: inserted, error: insertError } = await (supabase as any)
+            const { data: inserted, error: insertError } = await supabase
                 .from("categories")
                 .insert({
                     restaurant_id: restaurantId,
@@ -156,7 +167,7 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
                     is_active: true,
                 })
                 .select()
-                .single() as { data: Category | null; error: { code: string; message: string } | null }
+                .single()
 
             if (insertError) {
                 if (insertError.code === "23505") {
@@ -170,7 +181,7 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
                 return
             }
 
-            setCategories(prev => [...prev, inserted as Category])
+            setCategories(prev => [...prev, inserted!])
         }
 
         closeDialog()
@@ -182,7 +193,7 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
     async function handleToggleActive(category: Category) {
         const newVal = !category.is_active
 
-        const { error: toggleError } = await (supabase as any)
+        const { error: toggleError } = await supabase
             .from("categories")
             .update({ is_active: newVal })
             .eq("id", category.id)
@@ -195,21 +206,28 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
         router.refresh()
     }
 
-    // Sil
-    async function handleDelete(id: string) {
-        setDeletingId(id)
+    // Silme onayı iste
+    function confirmDelete(category: Category) {
+        setDeleteTarget(category)
+    }
 
-        const { error: deleteError } = await (supabase as any)
+    // Silme işlemini gerçekleştir
+    async function handleDelete() {
+        if (!deleteTarget) return
+        setDeletingId(deleteTarget.id)
+
+        const { error: deleteError } = await supabase
             .from("categories")
             .delete()
-            .eq("id", id)
+            .eq("id", deleteTarget.id)
 
         if (!deleteError) {
-            setCategories(prev => prev.filter(c => c.id !== id))
+            setCategories(prev => prev.filter(c => c.id !== deleteTarget.id))
             router.refresh()
         }
 
         setDeletingId(null)
+        setDeleteTarget(null)
     }
 
     // ---------------------------------------------------------------------------
@@ -296,7 +314,7 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
                                                     size="icon"
                                                     variant="ghost"
                                                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                    onClick={() => handleDelete(category.id)}
+                                                    onClick={() => confirmDelete(category)}
                                                     disabled={deletingId === category.id}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
@@ -371,6 +389,29 @@ export function CategoriesClient({ restaurantId, initialCategories }: Categories
                     </form>
                 </DialogContent>
             </Dialog>
+
+            {/* Silme Onay Diyaloğu */}
+            <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Kategoriyi silmek istediğinize emin misiniz?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            <strong>&ldquo;{deleteTarget?.name}&rdquo;</strong> kategorisi kalıcı olarak silinecektir.
+                            Bu kategoriye bağlı ürünler de etkilenebilir. Bu işlem geri alınamaz.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={!!deletingId}>İptal</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDelete}
+                            disabled={!!deletingId}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {deletingId ? "Siliniyor..." : "Evet, Sil"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

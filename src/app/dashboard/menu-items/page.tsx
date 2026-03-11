@@ -13,36 +13,34 @@ export default async function MenuItemsPage() {
     if (!user) redirect("/login")
 
     // Kullanıcının restoranını bul
-    const { data: restaurant } = await (supabase as any)
+    const { data: restaurant } = await supabase
         .from("restaurants")
         .select("id")
         .eq("owner_user_id", user.id)
-        .maybeSingle() as { data: { id: string } | null }
+        .maybeSingle()
 
     // Restoran yoksa dashboard'a yönlendir (onboarding)
     if (!restaurant) redirect("/dashboard")
 
     // Kategorileri getir
-    const { data: categories } = await (supabase as any)
+    const { data: categories } = await supabase
         .from("categories")
         .select("*")
         .eq("restaurant_id", restaurant.id)
-        .order("sort_order", { ascending: true }) as { data: Category[] | null }
+        .order("sort_order", { ascending: true })
 
     // Ürünleri getir
-    const { data: menuItems } = await (supabase as any)
+    const { data: menuItems } = await supabase
         .from("menu_items")
         .select("*")
         .eq("restaurant_id", restaurant.id)
-        .order("sort_order", { ascending: true }) as { data: MenuItem[] | null }
+        .order("sort_order", { ascending: true })
 
     return (
-        <main className="container mx-auto p-4 md:p-8 max-w-6xl">
-            <MenuItemsClient
-                restaurantId={restaurant.id}
-                initialMenuItems={(menuItems ?? []) as MenuItem[]}
-                categories={(categories ?? []) as Category[]}
-            />
-        </main>
+        <MenuItemsClient
+            restaurantId={restaurant.id}
+            initialMenuItems={(menuItems ?? []) as MenuItem[]}
+            categories={(categories ?? []) as Category[]}
+        />
     )
 }

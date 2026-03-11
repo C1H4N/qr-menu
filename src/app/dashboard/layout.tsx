@@ -15,23 +15,19 @@ export default async function DashboardLayout({
 
     if (!user) redirect("/login")
 
-    // Restoran bilgisini sadece nav için çek (name + slug)
-    const { data: restaurant } = await (supabase as any)
+    // Restoran bilgisini nav için çek
+    const { data: restaurant } = await supabase
         .from("restaurants")
         .select("name, slug")
         .eq("owner_user_id", user.id)
-        .maybeSingle() as { data: { name: string; slug: string } | null }
+        .maybeSingle()
 
     return (
-        <div className="flex min-h-screen bg-muted/10">
-            <DashboardNav
-                restaurantName={restaurant?.name ?? null}
-                restaurantSlug={restaurant?.slug ?? null}
-            />
-            {/* md'de sidebar var, mobile'de yoktur; content full width */}
-            <div className="flex-1 flex flex-col min-w-0">
-                {children}
-            </div>
-        </div>
+        <DashboardNav
+            restaurantName={restaurant?.name ?? null}
+            restaurantSlug={restaurant?.slug ?? null}
+        >
+            {children}
+        </DashboardNav>
     )
 }
